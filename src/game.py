@@ -44,7 +44,6 @@ class Game:
         self.message_timer = 0
         self._spawn_world()
 
-    # -- input ------------------------------------------------------------------
     def handle_events(self) -> bool:
         """Returns False when the game should quit."""
         for event in pygame.event.get():
@@ -84,7 +83,6 @@ class Game:
         self.message_timer = duration
         self._message_color = color or settings.COLOR_TEXT_DIM
 
-    # -- update -------------------------------------------------------------------
     def update(self):
         keys = pygame.key.get_pressed()
         self.player.update(keys)
@@ -107,12 +105,10 @@ class Game:
         if self.message_timer > 0:
             self.message_timer -= 1
 
-    # -- cinematic background ----------------------------------------------------
     def _draw_background(self, surface):
         """Draw an original layered night-fortress scene with parallax depth."""
         w, h = settings.WIDTH, settings.HEIGHT
 
-        # Vertical night gradient.
         for y in range(h):
             t = y / h
             color = (
@@ -122,7 +118,6 @@ class Game:
             )
             pygame.draw.line(surface, color, (0, y), (w, y))
 
-        # Moon glow and moon.
         moon = pygame.Surface((260, 260), pygame.SRCALPHA)
         for radius, alpha in ((112, 10), (92, 16), (75, 28)):
             pygame.draw.circle(moon, (180, 215, 255, alpha), (130, 130), radius)
@@ -131,51 +126,42 @@ class Game:
         pygame.draw.circle(moon, (197, 216, 233, 55), (145, 138), 8)
         surface.blit(moon, (890, 35))
 
-        # Distant mountains.
         far = (31, 49, 78)
         pygame.draw.polygon(surface, far, [(0, 430), (170, 265), (330, 420), (505, 235), (700, 430), (870, 275), (1060, 420), (1210, 245), (1280, 340), (1280, 570), (0, 570)])
         near = (24, 38, 59)
         pygame.draw.polygon(surface, near, [(0, 495), (190, 340), (370, 485), (575, 300), (790, 490), (1000, 325), (1180, 470), (1280, 390), (1280, 590), (0, 590)])
 
-        # Castle silhouette in the distance.
         self._draw_castle(surface, 915, 270, 0.9)
 
-        # Waterfall beneath the fortress.
         pygame.draw.polygon(surface, (77, 116, 147), [(930, 390), (1015, 390), (995, 530), (958, 570), (943, 520)])
         pygame.draw.line(surface, (124, 169, 195), (970, 405), (970, 535), 3)
 
-        # Bridge and distant buildings.
         pygame.draw.rect(surface, (19, 28, 40), (500, 470, 330, 16))
         pygame.draw.line(surface, (64, 87, 107), (500, 470), (585, 420), 3)
-        pygame.draw.line(surface, (585, 420), (675, 470), 3)
-        pygame.draw.line(surface, (675, 470), (760, 420), 3)
-        pygame.draw.line(surface, (760, 420), (830, 470), 3)
+        pygame.draw.line(surface, (64, 87, 107), (585, 420), (675, 470), 3)
+        pygame.draw.line(surface, (64, 87, 107), (675, 470), (760, 420), 3)
+        pygame.draw.line(surface, (64, 87, 107), (760, 420), (830, 470), 3)
         for x in (535, 615, 700, 785):
             pygame.draw.line(surface, (15, 24, 35), (x, 470), (x, 525), 5)
 
-        # Foreground temple structure.
         pygame.draw.polygon(surface, (10, 15, 21), [(0, 215), (250, 215), (305, 265), (0, 265)])
         pygame.draw.rect(surface, (13, 18, 25), (0, 265, 305, 300))
         pygame.draw.line(surface, (76, 54, 38), (0, 267), (305, 267), 5)
         pygame.draw.rect(surface, (29, 25, 25), (35, 330, 85, 235))
         pygame.draw.rect(surface, (44, 36, 28), (50, 345, 55, 180))
 
-        # Roof tiles.
         for x in range(-20, 310, 24):
             pygame.draw.line(surface, (48, 47, 53), (x, 220), (x + 35, 255), 5)
 
-        # Lanterns and red banners.
         self._draw_lantern(surface, 215, 330, 1.0)
         self._draw_banner(surface, 360, 265, 115)
         self._draw_banner(surface, 1125, 300, 125)
         self._draw_banner(surface, 1215, 335, 100)
 
-        # Foreground foliage for depth.
         self._draw_tree(surface, 90, settings.GROUND_Y, 1.1)
         self._draw_tree(surface, 1210, settings.GROUND_Y, 1.35)
         self._draw_tree(surface, 1090, settings.GROUND_Y, 0.75)
 
-        # Atmospheric mist bands.
         mist = pygame.Surface((w, 170), pygame.SRCALPHA)
         for y in range(0, 170, 22):
             alpha = 14 if y < 90 else 8
@@ -183,14 +169,12 @@ class Game:
             pygame.draw.ellipse(mist, (130, 160, 180, alpha), (690 - y, y + 18, 700, 80))
         surface.blit(mist, (0, 390))
 
-        # Ground platform with stone blocks.
         pygame.draw.rect(surface, (22, 25, 29), (0, settings.GROUND_Y, w, 80))
         pygame.draw.line(surface, (102, 111, 112), (0, settings.GROUND_Y), (w, settings.GROUND_Y), 3)
         for x in range(0, w, 82):
             pygame.draw.line(surface, (39, 43, 47), (x, settings.GROUND_Y + 2), (x + 16, h), 2)
             pygame.draw.line(surface, (42, 45, 49), (x + 16, settings.GROUND_Y + 42), (x + 75, settings.GROUND_Y + 42), 2)
 
-        # A subtle green horizon line reinforces the stealth identity.
         pygame.draw.line(surface, (53, 91, 72), (0, settings.GROUND_Y - 1), (w, settings.GROUND_Y - 1), 1)
 
     def _draw_castle(self, surface, x, y, scale):
@@ -259,7 +243,6 @@ class Game:
 
         pygame.display.flip()
 
-    # -- main loop ------------------------------------------------------------------
     def run(self):
         running = True
         while running:
