@@ -2,6 +2,7 @@
 The Player: movement, jumping, attacking, and stealth/assassination.
 """
 
+import math
 import pygame
 
 from .. import settings
@@ -138,7 +139,6 @@ class Player:
             settings.ATTACK_RANGE, settings.ATTACK_HEIGHT,
         )
 
-    # -- drawing --------------------------------------------------------------
     def draw(self, surface):
         x, bottom = int(self.x), int(self.y)
 
@@ -152,19 +152,19 @@ class Player:
         red = settings.COLOR_ACCENT_RED
         green = settings.COLOR_ACCENT_GREEN
 
-        # Soft shadow keeps the hero grounded against the new background.
+        # Ground shadow.
         shadow = pygame.Surface((82, 26), pygame.SRCALPHA)
         pygame.draw.ellipse(shadow, (0, 0, 0, 95), (0, 4, 82, 16))
         surface.blit(shadow, (x - 41, bottom - 8))
 
-        # Stealth aura behind the character.
+        # Stealth aura.
         if self.hidden:
             aura = pygame.Surface((150, 150), pygame.SRCALPHA)
             pygame.draw.circle(aura, (*green, 18), (75, 75), 58)
             pygame.draw.circle(aura, (*green, 85), (75, 75), 48, 2)
             surface.blit(aura, (x - 75, bottom - 95))
 
-        # Flowing scarf/cape. The direction changes with facing so it feels alive.
+        # Flowing red scarf.
         tail = -self.facing
         scarf = [
             (x - self.facing * 3, bottom - 64),
@@ -176,7 +176,7 @@ class Player:
         pygame.draw.polygon(surface, red, scarf)
         pygame.draw.line(surface, (241, 91, 98), scarf[1], scarf[2], 2)
 
-        # Hood/head: dark silhouette with a bright eye slit.
+        # Hood/head and eye slit.
         pygame.draw.circle(surface, dark, (x, bottom - 67), 13)
         hood_points = [
             (x - 12, bottom - 70), (x - 7, bottom - 80),
@@ -207,30 +207,32 @@ class Player:
             pygame.draw.line(surface, body, (x, arm_y), (x + 19, arm_y + 14), 5)
             pygame.draw.line(surface, red, (x - 14, arm_y + 10), (x - 19, arm_y + 14), 3)
 
-        # Belt and utility pouch.
+        # Belt and utility pouches.
         pygame.draw.line(surface, red, (x - 9, bottom - 32), (x + 9, bottom - 32), 3)
         pygame.draw.rect(surface, cloak_hi, (x - 15, bottom - 37, 7, 9), border_radius=2)
         pygame.draw.rect(surface, cloak_hi, (x + 8, bottom - 37, 7, 9), border_radius=2)
 
-        # Legs/boots with slight asymmetry for a ready stance.
+        # Legs and boots.
         pygame.draw.line(surface, body, (x, bottom - 29), (x - 15, bottom), 5)
         pygame.draw.line(surface, body, (x, bottom - 29), (x + 16, bottom), 5)
         pygame.draw.line(surface, dark, (x - 16, bottom), (x - 27, bottom), 5)
         pygame.draw.line(surface, dark, (x + 16, bottom), (x + 27, bottom), 5)
 
-        # Katana sheathed on the back when not attacking.
+        # Katana sheath when idle, blade when attacking.
         if not self.attacking:
             sx = x - self.facing * 8
             pygame.draw.line(surface, (132, 91, 51), (sx, bottom - 40), (sx - self.facing * 10, bottom - 62), 4)
             pygame.draw.line(surface, (205, 211, 218), (sx - self.facing * 10, bottom - 62), (sx - self.facing * 35, bottom - 88), 2)
             pygame.draw.line(surface, red, (sx - self.facing * 9, bottom - 61), (sx - self.facing * 16, bottom - 68), 3)
         else:
-            # Blade is extended during an attack.
             hand_x = x + self.facing * 28
             hand_y = bottom - 55
             pygame.draw.line(surface, (190, 196, 204), (hand_x, hand_y), (hand_x + self.facing * 38, hand_y - 22), 3)
             pygame.draw.line(surface, (244, 248, 250), (hand_x + self.facing * 5, hand_y - 3), (hand_x + self.facing * 38, hand_y - 22), 1)
 
-        # Small green outline on stealth edges.
         if self.hidden:
-            pygame.draw.arc(surface, green, (x - 25, bottom - 88, 50, 62), math.radians(35), math.radians(145), 2)
+            pygame.draw.arc(
+                surface, green,
+                (x - 25, bottom - 88, 50, 62),
+                math.radians(35), math.radians(145), 2,
+            )
