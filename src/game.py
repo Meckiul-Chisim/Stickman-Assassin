@@ -1,9 +1,8 @@
 """
-The Game class wires everything together: entities, audio, effects, UI,
-and the main update/draw loop.
+The Game class wires entities, audio, effects, UI and the main loop.
+Mobile touch controls and desktop keyboard controls feed the same actions.
 """
 
-import math
 import pygame
 
 from . import settings
@@ -18,16 +17,16 @@ class Game:
     def __init__(self, screen):
         self.screen = screen
         self.clock = pygame.time.Clock()
-
         self.audio = AudioManager()
         self.effects = EffectsManager()
         self.ui = UI()
-
         self.message = ""
         self.message_timer = 0
         self.kills = 0
         self._message_color = settings.COLOR_TEXT_DIM
-
+        self.touch_actions = {}
+        self.queued_actions = set()
+        self._mouse_action = None
         self._spawn_world()
 
     def _spawn_world(self):
@@ -42,28 +41,101 @@ class Game:
         self.kills = 0
         self.message = ""
         self.message_timer = 0
+        self.touch_actions.clear()
+        self.queued_actions.clear()
         self._spawn_world()
+
+    def _screen_pos_from_finger(self, event):
+        return int(event.x * settings.WIDTH), int(event.y * settings.HEIGHT)
+
+    def _queue_action(self, action):
+        if not action:
+            return
+        if not self.player.alive:
+            if action == "attack":
+                self.restart()
+            return
+        self.queued_actions.add(action)
+
+    def _set_touch(self, pointer_id, pos):
+        action = self.ui.touch_action_at(pos)
+        if action:
+            self.touch_actions[pointer_id] = action
+            if action not in ("left", "right"):
+                self._queue_action(action)
+        else:
+            self.touch_actions.pop(pointer_id, None)
+
+    def _handle_touch_release(self, pointer_id):
+        self.touch_actions.pop(pointer_id, None)
 
     def handle_events(self) -> bool:
         """Returns False when the game should quit."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
+
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
                 if event.key == pygame.K_r and not self.player.alive:
-                    self.restart()
-                    continue
+                    self.restart(); continue
                 if not self.player.alive:
                     continue
                 if event.key == pygame.K_j:
-                    self.player.attack()
+                    self._queue_action("attack")
                 elif event.key == pygame.K_e:
-                    self._try_assassination()
+                    self._queue_action("assassinate")
                 elif event.key == pygame.K_c:
-                    self.player.enter_stealth()
+                    self._queue_action("stealth")
+                elif event.key == pygame.K_l:
+                    self._queue_action("dash")
+
+            elif event.type == pygame.FINGERDOWN:
+                self._set_touch(event.finger_id, self._screen_pos_from_finger(event))
+            elif event.type == pygame.FINGERMOTION:
+                self._set_touch(event.finger_id, self._screen_pos_from_finger(event))
+            elif event.type == pygame.FINGERUP:
+                self._handle_touch_release(event.finger_id)
+
+            # Mouse clicks make the mobile controls easy to test on a laptop.
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                action = self.ui.touch_action_at(event.pos)
+                if action in ("left", "right"):
+                    self._mouse_action = action
+                else:
+                    self._queue_action(action)
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                self._mouse_action = None
         return True
+
+    def _collect_actions(self):
+        actions = {
+            "left": False,
+            "right": False,
+            "jump": False,
+        }
+        active = list(self.touch_actions.values())
+        if self._mouse_action:
+            active.append(self._mouse_action)
+        actions["left"] = "left" in active
+        actions["right"] = "right" in active
+        actions["jump"] = "jump" in self.queued_actions
+        return actions
+
+    def _perform_queued_actions(self):
+        if not self.player.alive:
+            self.queued_actions.clear()
+            return
+        if "attack" in self.queued_actions:
+            self.player.attack()
+        if "dash" in self.queued_actions:
+            self.player.dash()
+        if "stealth" in self.queued_actions:
+            self.player.enter_stealth()
+        if "assassinate" in self.queued_actions:
+            self._try_assassination()
+        self.queued_actions.clear()
 
     def _try_assassination(self):
         for enemy in self.enemies:
@@ -84,8 +156,10 @@ class Game:
         self._message_color = color or settings.COLOR_TEXT_DIM
 
     def update(self):
+        actions = self._collect_actions()
+        self._perform_queued_actions()
         keys = pygame.key.get_pressed()
-        self.player.update(keys)
+        self.player.update(keys, actions)
 
         attack_rect = self.player.get_attack_rect()
         for enemy in self.enemies:
@@ -101,21 +175,15 @@ class Game:
 
         self.enemies = [e for e in self.enemies if not e.fully_gone]
         self.effects.update()
-
         if self.message_timer > 0:
             self.message_timer -= 1
 
     def _draw_background(self, surface):
         """Draw an original layered night-fortress scene with parallax depth."""
         w, h = settings.WIDTH, settings.HEIGHT
-
         for y in range(h):
             t = y / h
-            color = (
-                int(8 + 13 * t),
-                int(16 + 17 * t),
-                int(38 + 22 * t),
-            )
+            color = (int(8 + 13 * t), int(16 + 17 * t), int(38 + 22 * t))
             pygame.draw.line(surface, color, (0, y), (w, y))
 
         moon = pygame.Surface((260, 260), pygame.SRCALPHA)
@@ -130,12 +198,9 @@ class Game:
         pygame.draw.polygon(surface, far, [(0, 430), (170, 265), (330, 420), (505, 235), (700, 430), (870, 275), (1060, 420), (1210, 245), (1280, 340), (1280, 570), (0, 570)])
         near = (24, 38, 59)
         pygame.draw.polygon(surface, near, [(0, 495), (190, 340), (370, 485), (575, 300), (790, 490), (1000, 325), (1180, 470), (1280, 390), (1280, 590), (0, 590)])
-
         self._draw_castle(surface, 915, 270, 0.9)
-
         pygame.draw.polygon(surface, (77, 116, 147), [(930, 390), (1015, 390), (995, 530), (958, 570), (943, 520)])
         pygame.draw.line(surface, (124, 169, 195), (970, 405), (970, 535), 3)
-
         pygame.draw.rect(surface, (19, 28, 40), (500, 470, 330, 16))
         pygame.draw.line(surface, (64, 87, 107), (500, 470), (585, 420), 3)
         pygame.draw.line(surface, (64, 87, 107), (585, 420), (675, 470), 3)
@@ -143,50 +208,38 @@ class Game:
         pygame.draw.line(surface, (64, 87, 107), (760, 420), (830, 470), 3)
         for x in (535, 615, 700, 785):
             pygame.draw.line(surface, (15, 24, 35), (x, 470), (x, 525), 5)
-
         pygame.draw.polygon(surface, (10, 15, 21), [(0, 215), (250, 215), (305, 265), (0, 265)])
         pygame.draw.rect(surface, (13, 18, 25), (0, 265, 305, 300))
         pygame.draw.line(surface, (76, 54, 38), (0, 267), (305, 267), 5)
         pygame.draw.rect(surface, (29, 25, 25), (35, 330, 85, 235))
         pygame.draw.rect(surface, (44, 36, 28), (50, 345, 55, 180))
-
         for x in range(-20, 310, 24):
             pygame.draw.line(surface, (48, 47, 53), (x, 220), (x + 35, 255), 5)
-
         self._draw_lantern(surface, 215, 330, 1.0)
         self._draw_banner(surface, 360, 265, 115)
         self._draw_banner(surface, 1125, 300, 125)
         self._draw_banner(surface, 1215, 335, 100)
-
         self._draw_tree(surface, 90, settings.GROUND_Y, 1.1)
         self._draw_tree(surface, 1210, settings.GROUND_Y, 1.35)
         self._draw_tree(surface, 1090, settings.GROUND_Y, 0.75)
-
         mist = pygame.Surface((w, 170), pygame.SRCALPHA)
         for y in range(0, 170, 22):
             alpha = 14 if y < 90 else 8
             pygame.draw.ellipse(mist, (130, 160, 180, alpha), (-80 + y * 2, y, 620, 80))
             pygame.draw.ellipse(mist, (130, 160, 180, alpha), (690 - y, y + 18, 700, 80))
         surface.blit(mist, (0, 390))
-
         pygame.draw.rect(surface, (22, 25, 29), (0, settings.GROUND_Y, w, 80))
         pygame.draw.line(surface, (102, 111, 112), (0, settings.GROUND_Y), (w, settings.GROUND_Y), 3)
         for x in range(0, w, 82):
             pygame.draw.line(surface, (39, 43, 47), (x, settings.GROUND_Y + 2), (x + 16, h), 2)
             pygame.draw.line(surface, (42, 45, 49), (x + 16, settings.GROUND_Y + 42), (x + 75, settings.GROUND_Y + 42), 2)
-
         pygame.draw.line(surface, (53, 91, 72), (0, settings.GROUND_Y - 1), (w, settings.GROUND_Y - 1), 1)
 
     def _draw_castle(self, surface, x, y, scale):
         def r(rx, ry, rw, rh, color):
             pygame.draw.rect(surface, color, (int(x + rx * scale), int(y + ry * scale), int(rw * scale), int(rh * scale)))
-
-        dark = (17, 27, 43)
-        roof = (12, 21, 35)
-        warm = (192, 137, 72)
-        r(-85, 115, 250, 155, dark)
-        r(-45, 55, 170, 210, dark)
-        r(-15, -5, 110, 270, dark)
+        dark = (17, 27, 43); roof = (12, 21, 35); warm = (192, 137, 72)
+        r(-85, 115, 250, 155, dark); r(-45, 55, 170, 210, dark); r(-15, -5, 110, 270, dark)
         for ry, rw, rx in ((112, 210, -65), (52, 145, -30), (-8, 100, -10)):
             pygame.draw.polygon(surface, roof, [(x + rx * scale, y + ry * scale), (x + (rx + rw) * scale, y + ry * scale), (x + (rx + rw - 25) * scale, y + (ry - 28) * scale), (x + (rx + 25) * scale, y + (ry - 28) * scale)])
         for row, yy in enumerate((92, 137, 180)):
@@ -221,26 +274,21 @@ class Game:
     def draw(self):
         scene = pygame.Surface((settings.WIDTH, settings.HEIGHT))
         self._draw_background(scene)
-
         for enemy in self.enemies:
             enemy.draw(scene)
         self.player.draw(scene)
         self.effects.draw(scene)
-
         self.ui.draw_health_bar(scene, self.player)
         self.ui.draw_stealth_indicator(scene, self.player)
         self.ui.draw_kill_counter(scene, self.kills)
-        self.ui.draw_controls_hint(scene)
+        self.ui.draw_touch_controls(scene, enabled=True)
         if self.message_timer > 0:
             self.ui.draw_message(scene, self.message, self._message_color)
-
         offset = self.effects.get_shake_offset()
         self.screen.fill(settings.COLOR_BG)
         self.screen.blit(scene, offset)
-
         if not self.player.alive:
             self.ui.draw_game_over(self.screen, self.kills)
-
         pygame.display.flip()
 
     def run(self):
