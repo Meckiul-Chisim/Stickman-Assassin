@@ -11,6 +11,8 @@ class LevelGame(Game):
     """Mobile-friendly level flow layered over the existing combat game."""
 
     def __init__(self, screen):
+        # Game.__init__ calls _spawn_world(), so level must exist first.
+        self.level = 1
         self.level_complete = False
         self.stars = 0
         super().__init__(screen)
