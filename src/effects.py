@@ -1,129 +1,54 @@
-"""
-Lightweight visual-effects layer: particles + screen shake.
+"""Particles, weapon trails, hit sparks and cinematic screen shake."""
 
-Kept deliberately separate from the entities (Player/Enemy) so gameplay code
-never has to know *how* an effect is drawn — it just calls
-`effects.spark_burst(x, y)` and moves on. This separation is what lets you
-swap in fancier effects later without touching Player/Enemy logic at all.
-"""
-
-import random
-import pygame
-
+import random, math, pygame
 from . import settings
 
-
 class Particle:
-    """A single short-lived dot/line used to build up bigger effects."""
-
-    __slots__ = ("x", "y", "vx", "vy", "life", "max_life", "color", "size", "shrink")
-
-    def __init__(self, x, y, vx, vy, life, color, size=3, shrink=True):
-        self.x = x
-        self.y = y
-        self.vx = vx
-        self.vy = vy
-        self.life = life
-        self.max_life = life
-        self.color = color
-        self.size = size
-        self.shrink = shrink
-
+    __slots__ = ("x","y","vx","vy","life","max_life","color","size","shrink")
+    def __init__(self,x,y,vx,vy,life,color,size=3,shrink=True):
+        self.x=x; self.y=y; self.vx=vx; self.vy=vy; self.life=life; self.max_life=life; self.color=color; self.size=size; self.shrink=shrink
     def update(self):
-        self.x += self.vx
-        self.y += self.vy
-        self.vy += settings.PARTICLE_GRAVITY
-        self.life -= 1
-
+        self.x+=self.vx; self.y+=self.vy; self.vy+=settings.PARTICLE_GRAVITY; self.life-=1
     @property
-    def alive(self):
-        return self.life > 0
-
-    def draw(self, surface):
-        t = self.life / self.max_life  # 1.0 -> 0.0 over its lifetime
-        size = max(1, int(self.size * t)) if self.shrink else self.size
-        alpha = max(0, min(255, int(255 * t)))
-
-        # Draw onto a tiny per-particle surface so we can fade it (alpha).
-        glow = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (*self.color, alpha), (size, size), size)
-        surface.blit(glow, (self.x - size, self.y - size))
-
+    def alive(self): return self.life>0
+    def draw(self,surface):
+        t=self.life/self.max_life; size=max(1,int(self.size*t)) if self.shrink else self.size; alpha=max(0,min(255,int(255*t)))
+        glow=pygame.Surface((size*4,size*4),pygame.SRCALPHA); pygame.draw.circle(glow,(*self.color,max(0,alpha//5)),(size*2,size*2),size*2); pygame.draw.circle(glow,(*self.color,alpha),(size*2,size*2),size); surface.blit(glow,(self.x-size*2,self.y-size*2))
 
 class EffectsManager:
-    """Owns every active particle plus the current screen-shake offset."""
-
-    def __init__(self):
-        self.particles: list[Particle] = []
-        self._shake_timer = 0
-        self._shake_strength = 0
-
-    # -- screen shake ------------------------------------------------------
-    def shake(self, strength: int, duration: int = 10):
-        self._shake_strength = max(self._shake_strength, strength)
-        self._shake_timer = max(self._shake_timer, duration)
-
-    def get_shake_offset(self) -> tuple[int, int]:
-        if self._shake_timer <= 0:
-            return 0, 0
-        magnitude = self._shake_strength * (self._shake_timer / 10)
-        return (
-            random.randint(-int(magnitude), int(magnitude)),
-            random.randint(-int(magnitude), int(magnitude)),
-        )
-
-    # -- particle presets ----------------------------------------------------
-    def slash_effect(self, x, y, facing):
-        """Quick arc of bright particles in front of the player's weapon."""
-        for _ in range(10):
-            angle_spread = random.uniform(-0.5, 0.5)
-            speed = random.uniform(4, 8)
-            vx = facing * speed * (1 - abs(angle_spread))
-            vy = speed * angle_spread
-            self.particles.append(
-                Particle(x, y, vx, vy, life=random.randint(8, 14), color=settings.COLOR_TEXT, size=3)
-            )
-
-    def hit_sparks(self, x, y):
-        """Impact sparks when an attack lands on an enemy."""
-        for _ in range(14):
-            vx = random.uniform(-4, 4)
-            vy = random.uniform(-5, 1)
-            self.particles.append(
-                Particle(x, y, vx, vy, life=random.randint(10, 20), color=settings.COLOR_ACCENT_RED, size=3)
-            )
-        self.shake(settings.SHAKE_ON_HIT)
-
-    def assassination_burst(self, x, y):
-        """Big pale-green burst for the stealth-kill payoff."""
-        for _ in range(28):
-            angle = random.uniform(0, 6.283)
-            speed = random.uniform(2, 7)
-            vx = speed * random.uniform(-1, 1)
-            vy = speed * random.uniform(-1, 1)
-            self.particles.append(
-                Particle(x, y, vx, vy, life=random.randint(20, 34), color=settings.COLOR_ACCENT_GREEN, size=4)
-            )
-        self.shake(settings.SHAKE_ON_ASSASSINATION, duration=14)
-
-    def dust_step(self, x, y):
-        """Subtle dust puff — used for jump landings."""
-        for _ in range(6):
-            vx = random.uniform(-1.5, 1.5)
-            vy = random.uniform(-1.5, -0.2)
-            self.particles.append(
-                Particle(x, y, vx, vy, life=random.randint(10, 16), color=settings.COLOR_TEXT_DIM, size=2)
-            )
-
-    # -- lifecycle -----------------------------------------------------------
+    def __init__(self): self.particles=[]; self.slashes=[]; self._shake_timer=0; self._shake_strength=0
+    def shake(self,strength,duration=10): self._shake_strength=max(self._shake_strength,strength); self._shake_timer=max(self._shake_timer,duration)
+    def get_shake_offset(self):
+        if self._shake_timer<=0: return 0,0
+        m=self._shake_strength*(self._shake_timer/10); return random.randint(-int(m),int(m)),random.randint(-int(m),int(m))
+    def _burst(self,x,y,count,color,speed_min,speed_max,life_min,life_max,size):
+        for _ in range(count):
+            a=random.uniform(0,math.tau); speed=random.uniform(speed_min,speed_max)
+            self.particles.append(Particle(x,y,math.cos(a)*speed,math.sin(a)*speed,random.randint(life_min,life_max),color,size))
+    def slash_effect(self,x,y,facing):
+        self._burst(x,y,18,settings.COLOR_TEXT,4,9,8,16,3)
+        self.slashes.append([x,y,facing,0])
+        self.shake(2,5)
+    def hit_sparks(self,x,y):
+        self._burst(x,y,20,settings.COLOR_ACCENT_RED,2,8,10,22,4); self.shake(settings.SHAKE_ON_HIT,9)
+    def assassination_burst(self,x,y):
+        self._burst(x,y,42,settings.COLOR_ACCENT_GREEN,2,9,20,38,5)
+        self._burst(x,y,14,settings.COLOR_TEXT,3,8,12,24,3)
+        self.shake(settings.SHAKE_ON_ASSASSINATION,16)
+    def dust_step(self,x,y):
+        for _ in range(8):
+            self.particles.append(Particle(x,y,random.uniform(-2,2),random.uniform(-1.8,-.2),random.randint(10,18),settings.COLOR_TEXT_DIM,2))
     def update(self):
-        for p in self.particles:
-            p.update()
-        self.particles = [p for p in self.particles if p.alive]
-
-        if self._shake_timer > 0:
-            self._shake_timer -= 1
-
-    def draw(self, surface):
-        for p in self.particles:
-            p.draw(surface)
+        for p in self.particles: p.update()
+        self.particles=[p for p in self.particles if p.alive]
+        for s in self.slashes: s[3]+=1
+        self.slashes=[s for s in self.slashes if s[3]<12]
+        if self._shake_timer>0: self._shake_timer-=1
+    def draw(self,surface):
+        for s in self.slashes:
+            x,y,facing,age=s; alpha=max(0,180-age*15); trail=pygame.Surface((180,130),pygame.SRCALPHA)
+            rect=pygame.Rect(15,15,150,100); start=math.radians(205 if facing==1 else -25); end=math.radians(335 if facing==1 else 155)
+            pygame.draw.arc(trail,(settings.COLOR_ACCENT_RED[0],settings.COLOR_ACCENT_RED[1],settings.COLOR_ACCENT_RED[2],alpha),rect,start,end,8)
+            pygame.draw.arc(trail,(255,245,245,alpha),rect.inflate(-8,-8),start,end,3)
+            surface.blit(trail,(x-90,y-65))
+        for p in self.particles: p.draw(surface)
