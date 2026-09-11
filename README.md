@@ -1,8 +1,6 @@
 # Stickman Assassin
 
-A refined, modular rebuild of the original single-file prototype: same core
-idea (stealth vs. combat stickman game), now organized so it's actually
-maintainable and extendable.
+A modular, mobile-first stealth/combat stickman game built with Python + Pygame. The game is designed around phone touch controls, while the full keyboard controls remain available for fast development and laptop testing.
 
 ## Run it
 
@@ -13,84 +11,76 @@ python main.py
 
 ## Controls
 
-| Key            | Action                                           |
-|----------------|---------------------------------------------------|
-| A/D or ←/→     | Move                                              |
-| SPACE / W / ↑  | Jump                                              |
-| J              | Attack                                            |
-| C              | Enter stealth                                     |
-| E              | Assassinate (hidden + close + enemy not alerted)  |
-| R              | Restart after death                               |
-| ESC            | Quit                                              |
+### Mobile / Touch
 
-## Project structure
+- Left / Right — move
+- JUMP — jump
+- ATK — sword attack
+- DASH — quick evasive dash
+- HIDE — enter stealth
+- ASSASSINATE — instant takedown when hidden and close to an unaware enemy
 
-```
+The touch buttons are drawn directly into the game world and use the same gameplay actions as keyboard input.
+
+### Laptop / Desktop
+
+| Key | Action |
+|---|---|
+| A/D or ←/→ | Move |
+| SPACE / W / ↑ | Jump |
+| J | Attack |
+| L | Dash |
+| C | Enter stealth |
+| E | Assassinate |
+| R | Restart after death |
+| ESC | Quit |
+
+You can also **click the on-screen mobile buttons with a mouse** to test the mobile layout on a laptop.
+
+## Current game features
+
+- Original animated assassin hero model with hood, scarf, armor and katana
+- Stealth mode with visual feedback and timer
+- Sword combat with hit detection and VFX
+- Assassination mechanic
+- Enemy detection, alert and attacks
+- Player health and game-over state
+- Dash with a short invulnerability window
+- Procedural sound effects
+- Hit particles, assassination effects and screen shake
+- Layered night-fortress environment with moon, castle, bridge, banners, trees, mist and lanterns
+- Responsive mobile-oriented touch HUD
+
+## Architecture
+
+```text
 stickman_assassin/
-├── main.py                 # entry point only — creates the window, starts Game
+├── main.py
 ├── requirements.txt
 └── src/
-    ├── settings.py          # every tunable number/color lives here
-    ├── audio.py              # procedurally synthesized sound effects
-    ├── effects.py             # particles + screen shake (VFX)
-    ├── ui.py                  # HUD drawing (health bar, messages, game over)
-    ├── game.py                # main loop: wires input -> update -> draw
+    ├── settings.py
+    ├── audio.py
+    ├── effects.py
+    ├── ui.py
+    ├── game.py
     └── entities/
         ├── player.py
         └── enemy.py
 ```
 
-**Why split it up this way:** the original file mixed physics, drawing,
-input, and game state into two classes and a loop. That's fine at 300 lines,
-but every feature you add after this (a second weapon, a level system, a
-menu) makes a single file harder to reason about. Splitting by
-responsibility (entities vs. effects vs. audio vs. UI vs. orchestration)
-means you can open exactly one file to change exactly one thing.
+Gameplay input is intentionally unified: keyboard, mouse and touch all produce the same action names. This makes it easier to keep the mobile and laptop versions consistent as new mechanics are added.
 
-## What changed from the original, and why
+## Next development phase
 
-- **Real enemy attacks.** Enemies used to just walk at you forever with no
-  way to hurt you — "combat" had no stakes. Now an alerted enemy that gets
-  close winds up (telegraphed by a color flash) and hits you for damage.
-  This makes stealth a genuine tradeoff against fighting head-on, not just
-  a bonus animation.
-- **Procedural audio (no asset files).** `audio.py` synthesizes every sound
-  effect from scratch with numpy (sine/noise/sweep waveforms + envelopes),
-  cached at startup. That means zero missing-file bugs and nothing to
-  license — and if you later want real recorded SFX, you only need to
-  change `AudioManager._build_all`; nothing else in the game calls sounds
-  by anything other than name (`audio.play("hit")`).
-- **Particle VFX + screen shake** (`effects.py`) for slashes, hit sparks, the
-  assassination burst, and landing dust — all driven by the same small
-  `Particle` class so new effects are just new particle presets.
-- **Player has real health and can die** (it previously had a `health`
-  field that nothing ever touched). There's a game-over screen and a
-  restart key.
-- **Dependency injection for Audio/Effects.** `Player` and `Enemy` receive
-  their `AudioManager`/`EffectsManager` instances instead of importing
-  global singletons. This is what keeps them testable in isolation (see
-  how the game was verified below) and avoids hidden global state.
-- **`settings.py`** centralizes every magic number and color so balancing
-  (jump height, damage, colors) never requires touching gameplay code.
+The next major pass will move the prototype toward a full mobile game experience:
 
-## Design language
-
-Dark, minimalist background with a subtle grid — kept a clean, professional
-feel rather than a busy arcade look. Red is reserved for danger/damage/
-alert states; pale green is reserved for stealth and the assassination
-payoff, so the palette also communicates game state at a glance.
-
-## Verified
-
-The full update/draw loop, enemy alert → attack → damage sequence, and the
-stealth → assassination → death-fade sequence were run headlessly (SDL
-dummy video/audio drivers) for several hundred simulated frames with no
-exceptions, confirming the refactor didn't just move bugs around.
-
-## Natural next steps (not built, to keep this a review-able diff)
-
-- A second enemy type or a ranged enemy to give stealth more purpose across
-  a full level.
-- A simple level/wave system instead of two fixed enemies.
-- Swap procedural SFX for mixed/recorded ones once you have an art pass —
-  the `audio.py` interface won't need to change.
+1. Home screen with Play, Heroes, Settings and Progression
+2. Level-selection map with locked/unlocked stages
+3. Multiple environments and handcrafted levels
+4. More enemy types and minibosses
+5. Combos, heavy attacks and abilities
+6. Better hit reactions and animation states
+7. Coins, upgrades and equipment
+8. Boss fights and cinematic assassination moments
+9. Save/progression system
+10. Mobile packaging and performance optimization
